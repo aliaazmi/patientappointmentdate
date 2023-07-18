@@ -9,7 +9,7 @@ from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Table, TableStyle
 
-app = dash.Dash(_name_, external_stylesheets=[dbc.themes.BOOTSTRAP])
+app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
 server = app.server
 app.title = 'Patient Appointment Date'
 
@@ -185,5 +185,5 @@ def handle_calculate_button(n_clicks, name, start_date, interval_type, interval_
     return None, False
 
 
-if _name_ == '_main_':
+if __name__ == '_main_':
     app.run_server()

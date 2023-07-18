@@ -1,0 +1,9 @@
+dash==2.11.1
+dash_bootstrap_components==0.13.1
+dash_core_components==2.0.0
+dash_html_components==2.0.0
+pandas==2.0.3
+python_dateutil==2.8.2
+reportlab==4.0.4
+gunicorn
+dash-tools

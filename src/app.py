@@ -2,12 +2,12 @@ import dash
 import dash_core_components as dcc
 import dash_html_components as html
 import dash_bootstrap_components as dbc
+import base64
+import io
 from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
 from dash.dependencies import Output, Input, State
-from reportlab.lib.pagesizes import letter
-from reportlab.lib.styles import getSampleStyleSheet
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Table, TableStyle
+import pandas as pd
 
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
 server = app.server
@@ -84,6 +84,7 @@ app.layout = dbc.Container(
             is_open=False,
             duration=4000,
         ),
+        html.A(id='download-link', children='Download Excel', download='', href='', className='btn btn-primary')
     ],
     className='p-5',
 )
@@ -115,49 +116,22 @@ def calculate_appointment_dates(start_date, interval_type, interval_value, plus_
     return appointment_dates
 
 
-def generate_pdf_report(name, appointment_dates, appointment_type, plus_minus_days):
-    doc = SimpleDocTemplate("appointment_report.pdf", pagesize=letter)
-    elements = []
-
-    styles = getSampleStyleSheet()
-    title = Paragraph("Patient Appointment Dates", styles['Title'])
-    elements.append(title)
-
-    name_paragraph = Paragraph(f"Patient Name: {name}", styles['Normal'])
-    elements.append(name_paragraph)
-
-    type_paragraph = Paragraph(f"Appointment Type: {appointment_type}", styles['Normal'])
-    elements.append(type_paragraph)
-
-    data = [['Cycle Number', 'Date', 'Plus Day Date', 'Minus Day Date']]
-    for i, date in enumerate(appointment_dates):
-        if i % 3 == 0:
-            data.append([str(i // 3 + 1), date, '', ''])
-        elif i % 3 == 1:
-            data[-1][2] = date
-        else:
-            data[-1][3] = date
-
-    table = Table(data)
-    table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), '#CCCCCC'),
-        ('TEXTCOLOR', (0, 0), (-1, 0), '#000000'),
-        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, 0), 12),
-        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-        ('BACKGROUND', (0, 1), (-1, -1), '#FFFFFF'),
-        ('BOX', (0, 0), (-1, -1), 1, '#000000'),
-        ('GRID', (0, 0), (-1, -1), 0.5, '#000000'),
-    ]))
-    elements.append(table)
-
-    doc.build(elements)
+def generate_excel_report(table_data):
+    df = pd.DataFrame(table_data[1:], columns=table_data[0])
+    excel_file = io.BytesIO()
+    with pd.ExcelWriter(excel_file, engine='xlsxwriter') as writer:
+        df.to_excel(writer, sheet_name='Appointment Report', index=False)
+    excel_file.seek(0)
+    excel_file_binary = excel_file.getvalue()
+    encoded_excel = base64.b64encode(excel_file_binary).decode('utf-8')
+    return f'data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,{encoded_excel}'
 
 
 @app.callback(
     Output('appointment-table-div', 'children'),
     Output('alert', 'is_open'),
+    Output('download-link', 'download'),
+    Output('download-link', 'href'),
     [Input('calculate-button', 'n_clicks')],
     [State('name-input', 'value'),
      State('start-date-input', 'value'),
@@ -171,19 +145,19 @@ def handle_calculate_button(n_clicks, name, start_date, interval_type, interval_
     if n_clicks > 0 and name and start_date and interval_type and interval_value:
         plus_minus_days = int(plus_minus_days) if plus_minus_days else 0
         appointment_dates = calculate_appointment_dates(start_date, interval_type, interval_value, plus_minus_days)
-        generate_pdf_report(name, appointment_dates, appointment_type, plus_minus_days)
-
         table_data = [['Cycle Number', 'Date', 'Plus Day Date', 'Minus Day Date']]
         for i in range(0, len(appointment_dates), 3):
             table_data.append([str(i // 3 + 1), appointment_dates[i], appointment_dates[i + 1], appointment_dates[i + 2]])
 
+        excel_link = generate_excel_report(table_data)
+
         table_rows = [html.Tr([html.Td(col) for col in row]) for row in table_data]
         table = html.Table(table_rows, className='table table-striped')
 
-        return table, True
+        return table, True, 'appointment_report.xlsx', excel_link
 
-    return None, False
+    return None, False, '', ''
 
 
-if __name__ == '_main_':
-    app.run_server()
+if __name__ == '__main__':
+    app.run_server(debug=True)
